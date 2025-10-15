@@ -34,7 +34,6 @@ class PluginMetadata:
 
     name: str
     module: ModuleType
-    path: Path
     event_subscriptions: List[str]
     handler: PluginHandler
     tasks: List[asyncio.Task] = field(default_factory=list)
@@ -89,7 +88,7 @@ class PluginManager:
 
         LOGGER.info("Reloading plugin '%s'", plugin_name)
         await self.unload_plugin(plugin_name)
-        await self.load_plugin(metadata.path)
+        await self.load_plugin(Path(metadata.module.__file__ or ""))
 
     async def unload_plugin(self, plugin_name: str) -> None:
         """Stop background tasks and remove a plugin."""
@@ -99,19 +98,9 @@ class PluginManager:
             LOGGER.warning("Attempted to unload unknown plugin '%s'", plugin_name)
             return
 
-        for event_name, queue in metadata.queues.items():
-            # Signal the worker to exit gracefully before awaiting cancellation.
-            await queue.put(None)
-
-        if metadata.tasks:
-            results = await asyncio.gather(*metadata.tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, Exception) and not isinstance(
-                    result, asyncio.CancelledError
-                ):
-                    LOGGER.warning(
-                        "Background task for plugin '%s' exited with %s", metadata.name, result
-                    )
+        for task in metadata.tasks:
+            task.cancel()
+        await asyncio.gather(*metadata.tasks, return_exceptions=True)
 
         for event_name, queue in metadata.queues.items():
             await self._event_dispatcher.unregister_queue(event_name, queue)
@@ -180,7 +169,6 @@ class PluginManager:
         return PluginMetadata(
             name=name,
             module=module,
-            path=init_file.resolve(),
             event_subscriptions=subscriptions,
             handler=handler,
         )
