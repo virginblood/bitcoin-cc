@@ -1,8 +1,9 @@
 import asyncio
 import textwrap
+from types import ModuleType
 
 from ..core.event_dispatcher import EventDispatcher
-from ..core.plugin_manager import PluginManager
+from ..core.plugin_manager import PluginManager, PluginMetadata
 
 
 def test_plugin_manager_reports_health(tmp_path) -> None:
@@ -47,3 +48,42 @@ async def _test_plugin_manager_reports_health(tmp_path) -> None:
     assert health["plugins"][0]["name"] == "demo"
 
     await manager.shutdown()
+
+
+def test_unload_plugin_handles_full_bounded_queue(tmp_path) -> None:
+    asyncio.run(_test_unload_plugin_handles_full_bounded_queue(tmp_path))
+
+
+async def _test_unload_plugin_handles_full_bounded_queue(tmp_path) -> None:
+    class BoundedDispatcher(EventDispatcher):
+        def register_queue(self, event_name: str) -> "asyncio.Queue[dict]":
+            queue: "asyncio.Queue[dict]" = asyncio.Queue(maxsize=1)
+            self._queues[event_name].append(queue)
+            return queue
+
+    loop = asyncio.get_running_loop()
+    dispatcher = BoundedDispatcher()
+    manager = PluginManager(tmp_path, dispatcher, loop=loop)
+
+    async def handler(event_name: str, payload: dict) -> None:
+        await asyncio.sleep(0)
+
+    metadata = PluginMetadata(
+        name="bounded-plugin",
+        module=ModuleType("cc_bounded_plugin"),
+        event_subscriptions=["test-event"],
+        handler=handler,
+    )
+
+    await manager._register_plugin(metadata)
+    queue = metadata.queues["test-event"]
+    tasks = list(metadata.tasks)
+
+    queue.put_nowait({"event": "test-event", "data": {}})
+    assert queue.full()
+
+    await asyncio.wait_for(manager.unload_plugin(metadata.name), timeout=1)
+
+    assert metadata.name not in manager._plugins
+    assert all(task.done() for task in tasks)
+    assert queue.empty()

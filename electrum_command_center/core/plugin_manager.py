@@ -98,12 +98,7 @@ class PluginManager:
             LOGGER.warning("Attempted to unload unknown plugin '%s'", plugin_name)
             return
 
-        for task in metadata.tasks:
-            task.cancel()
-        await asyncio.gather(*metadata.tasks, return_exceptions=True)
-
-        for event_name, queue in metadata.queues.items():
-            await self._event_dispatcher.unregister_queue(event_name, queue)
+        await self._teardown_metadata(metadata)
 
         if metadata.module.__name__ in sys.modules:
             del sys.modules[metadata.module.__name__]
@@ -205,6 +200,32 @@ class PluginManager:
                 break
 
             await self._dispatch_event(metadata, event_name, event)
+
+    async def _teardown_metadata(self, metadata: PluginMetadata) -> None:
+        for queue in metadata.queues.values():
+            await self._enqueue_shutdown(queue)
+
+        if metadata.tasks:
+            await asyncio.gather(*metadata.tasks, return_exceptions=True)
+
+        for event_name, queue in metadata.queues.items():
+            await self._event_dispatcher.unregister_queue(event_name, queue)
+
+        metadata.tasks.clear()
+        metadata.queues.clear()
+
+    async def _enqueue_shutdown(self, queue: "asyncio.Queue[Dict[str, Any]]") -> None:
+        while True:
+            try:
+                queue.put_nowait(None)
+                break
+            except asyncio.QueueFull:
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    await asyncio.sleep(0)
+                else:
+                    continue
 
     async def _dispatch_event(
         self, metadata: PluginMetadata, event_name: str, event: Dict[str, Any]
