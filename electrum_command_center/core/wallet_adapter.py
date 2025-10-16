@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Awaitable, Callable, Dict, Optional
 
+from .event_schemas import ConnectionState
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,8 +25,9 @@ class WalletAdapter:
     def __init__(self) -> None:
         self._callback: Optional[WalletEventCallback] = None
         self._running = False
+        self._server: Optional[str] = None
 
-    async def start(self) -> None:
+    async def start(self, *, server: Optional[str] = None) -> None:
         """Start the adapter.
 
         In the production system this would ensure the Electrum wallet is fully
@@ -33,9 +36,16 @@ class WalletAdapter:
         """
 
         self._running = True
+        if server is not None:
+            self._server = server
         LOGGER.info("Wallet adapter started")
+        await self._emit_connection_state("connected")
 
     async def stop(self) -> None:
+        if not self._running:
+            return
+
+        await self._emit_connection_state("disconnected")
         self._running = False
         LOGGER.info("Wallet adapter stopped")
 
@@ -43,6 +53,20 @@ class WalletAdapter:
         """Register the dispatcher callback."""
 
         self._callback = callback
+
+    async def update_connection_state(
+        self, state: str, *, server: Optional[str] = None
+    ) -> None:
+        """Emit an updated connection state event.
+
+        The adapter keeps track of the latest Electrum server so callers can omit
+        ``server`` when the endpoint has not changed.
+        """
+
+        if server is not None:
+            self._server = server
+
+        await self._emit_connection_state(state)
 
     async def emit_event(self, event_name: str, payload: Dict[str, Any]) -> None:
         """Emit an event to the dispatcher if the adapter is running."""
@@ -57,6 +81,10 @@ class WalletAdapter:
 
         await self._callback(event_name, payload)
 
+    async def _emit_connection_state(self, state: str) -> None:
+        payload = ConnectionState(state=state, server=self._server).to_payload()
+        await self.emit_event("connection_state", payload)
+
     # ------------------------------------------------------------------
     # Simulation helpers used for early development
     # ------------------------------------------------------------------
@@ -68,4 +96,9 @@ class WalletAdapter:
 
     async def simulate_transaction_confirmed(self, **payload: Any) -> None:
         await self.emit_event("transaction_confirmed", payload)
+
+    async def simulate_connection_state(
+        self, state: str, *, server: Optional[str] = None
+    ) -> None:
+        await self.update_connection_state(state, server=server)
 
