@@ -25,10 +25,10 @@ This document summarizes the current state of the Command Center core and highli
 3. **WebSocket + Transport Hardening** — all transports require tokens, expose structured errors, support client reconnection by ID, and surface health snapshots (dispatcher, plugin lifecycle, connection counts).
 4. **Automation & Plugin Integrations** — the automation engine supports webhook, chat, overlay, and media actions, performs live rule reloads, and bridges its events to the stream bridge and chat server transports.
 5. **Developer Experience & Quality Gates** — plugin health metrics are reachable through the WebSocket API, pytest coverage spans dispatcher/plugin manager/automation flows, and ruff/mypy/pyright configurations live in `pyproject.toml` and `pyrightconfig.json`.
+6. **Telemetry Persistence** — dispatcher and plugin health snapshots are archived in-memory, service health events are recorded, and the WebSocket/CLI interfaces expose historical telemetry for inspection.
 
 ### Follow-up Focus Areas
 1. **Wallet + Network Resilience** — bubble Electrum disconnect/reconnect events through the dispatcher so transports can reflect degraded service states.
-2. **Telemetry Persistence** — persist dispatcher/plugin health snapshots for historical inspection and expose them through the CLI.
 3. **Secrets & Configuration** — move WebSocket/chat tokens into a managed settings store with reload support and provide tooling for secure rotation.
 4. **Frontend Enablement** — begin scaffolding the local dashboard leveraging the hardened WebSocket APIs and automation outputs.
 

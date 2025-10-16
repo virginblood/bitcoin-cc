@@ -1,6 +1,10 @@
 import asyncio
 import contextlib
 
+import asyncio
+import contextlib
+
+from electrum_command_center.core.telemetry_store import TelemetryStore
 from electrum_command_center.core.websocket_server import WebSocketServer, _Client
 
 
@@ -10,6 +14,18 @@ class _DummyDispatcher:
 
 class _DummyPluginManager:
     """Minimal plugin manager stub for testing."""
+
+    def plugin_status(self) -> dict:
+        return {"loaded": 0, "plugins": []}
+
+    def list_available_plugins(self) -> list:
+        return []
+
+    def dispatcher_metrics(self) -> dict:
+        return {"delivered": {}, "dropped": {}, "subscribers": []}
+
+    def plugin_health(self) -> dict:
+        return {"loaded": 0, "plugins": []}
 
 
 class _DummyServer:
@@ -70,3 +86,29 @@ async def _run_stop_without_deadlock() -> None:
 
 def test_websocket_server_stop_completes() -> None:
     asyncio.run(_run_stop_without_deadlock())
+
+
+async def _run_health_history_snapshot() -> None:
+    telemetry = TelemetryStore(max_health_records=5, max_service_records=0)
+    server = WebSocketServer(
+        host="127.0.0.1",
+        port=0,
+        dispatcher=_DummyDispatcher(),
+        plugin_manager=_DummyPluginManager(),
+        telemetry_store=telemetry,
+    )
+
+    snapshot = server._health_snapshot()
+    assert snapshot["type"] == "health"
+
+    history = telemetry.health_history()
+    assert len(history) == 1
+    assert history[0]["payload"]["type"] == "health"
+
+    payload = server._history_snapshot()
+    assert payload["type"] == "history"
+    assert payload["health"][0]["payload"]["type"] == "health"
+
+
+def test_websocket_server_records_health_history() -> None:
+    asyncio.run(_run_health_history_snapshot())
