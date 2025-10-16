@@ -6,15 +6,15 @@ This document summarizes the current state of the Command Center core and highli
 - **Wallet Adapter**: Bridges Electrum's callback manager when a wallet/network is supplied, translating `new_transaction`, `wallet_updated`, and `network_updated` events into the Command Center schema while retaining simulation helpers for development.【F:electrum_command_center/core/wallet_adapter.py†L1-L247】
 - **Event Dispatcher**: Fans out wallet signals to multiple subscribers through asyncio queues, tracks per-subscriber queue occupancy, exposes back-pressure controls, and provides a callback factory used by the adapter.【F:electrum_command_center/core/event_dispatcher.py†L1-L151】
 - **Plugin Manager**: Discovers plugin `init.py` modules, validates metadata, spawns per-event workers, supports reload/unload flows for dev hot reloading, injects lifecycle-aware `PluginContext` objects, and surfaces plugin health/dispatcher metrics for remote introspection.【F:electrum_command_center/core/plugin_manager.py†L1-L490】【F:electrum_command_center/core/plugin_context.py†L1-L60】
-- **Demo Entry Point**: Boots the adapter, dispatcher, plugin manager, and auxiliary services, can attach to a real Electrum wallet via CLI/env overrides, and still simulates a fallback `transaction_received` event to demonstrate the pipeline end-to-end while reporting dispatcher metrics.【F:electrum_command_center/core/main.py†L1-L148】
+- **Demo Entry Point**: Boots the adapter, dispatcher, plugin manager, and auxiliary services, then simulates a `transaction_received` event to demonstrate the pipeline end-to-end while reporting dispatcher metrics.【F:electrum_command_center/core/main.py†L1-L72】
 - **Built-In Plugins**: The stream bridge exposes a dedicated overlay WebSocket feed, the chat server serves a local HTML/JS interface backed by a WebSocket hub, and the automation engine evaluates JSON-defined rules to emit follow-up actions.【F:electrum_command_center/plugins/stream_bridge/init.py†L1-L189】【F:electrum_command_center/plugins/chat_server/init.py†L1-L266】【F:electrum_command_center/plugins/automation/init.py†L1-L260】
 
 ## Gaps Against the Initial Brief
-1. **Wallet Lifecycle Coverage**: The new Electrum bootstrapper needs broader validation (multi-wallet switching, password rotation, Lightning-enabled wallets) and graceful handling when the remote daemon drops or the wallet file changes on disk.
-2. **System Communications Layer**: The core WebSocket service still needs richer authentication, resilience against slow clients, and potential REST/SSE interop even though the dependency is now installed via development requirements.【F:electrum_command_center/core/websocket_server.py†L1-L212】
-3. **Plugin Capabilities**: Overlay and chat servers still depend on the external `websockets` library; fallbacks, client authentication, persistence, and richer integrations with OBS/Twitch remain to be implemented.
+1. **Real Wallet Integration**: The adapter still uses simulated events; integration with the private Electrum fork and its event surface remains outstanding.
+2. **System Communications Layer**: The core WebSocket service remains optional at runtime until the `websockets` dependency is available; richer authentication, resilience, and potential REST interop are still outstanding.【F:electrum_command_center/core/websocket_server.py†L1-L212】
+3. **Plugin Capabilities**: Overlay and chat servers currently depend on the external `websockets` library; fallbacks, client authentication, persistence, and richer integrations with OBS/Twitch remain to be implemented.
 4. **Runtime Tooling**: Hot-reload support now exists when `watchfiles` is installed, yet deeper plugin status reporting, telemetry surfacing, and remote management flows are still outstanding.
-5. **Quality Gates Expansion**: The CI workflow exercises linting, typing, and pytest, but integration with hardware wallet fixtures, Lightning simulators, and end-to-end smoke tests remains open.
+5. **Testing & CI**: Automated coverage, linting, and type checking are not configured, risking regressions as functionality grows.
 
 ## Recommended Immediate Actions
 

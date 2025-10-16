@@ -2,5 +2,5 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/pyright-internal/schemas/pyrightconfig.schema.json",
   "pythonVersion": "3.11",
   "include": ["electrum_command_center"],
-  "typeCheckingMode": "off"
+  "typeCheckingMode": "basic"
 }

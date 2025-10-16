@@ -2,10 +2,10 @@
 
 This document outlines recommended next steps that build on the core event and plugin scaffolding already implemented. It is derived from the initial project brief and the current repository state.
 
-## 1. Stabilize Core Services ✅
-- **Wallet Adapter Integration**: ✅ The adapter now binds to Electrum's callback manager when a wallet/network is attached, translates real ``new_transaction`` / ``wallet_updated`` events, and retains simulation helpers for dev workflows.
-- **Event Dispatcher Hardening**: ✅ Per-subscriber queue metadata, overflow diagnostics, and occupancy snapshots are available so slow consumers and back-pressure can be detected quickly.
-- **Plugin Lifecycle Enhancements**: ✅ Plugins track health status, failure counts, and per-event subscription IDs while the manager exposes dispatcher metrics for remote introspection.
+## 1. Stabilize Core Services
+- **Wallet Adapter Integration**: Replace the mock hooks with bindings to the private Electrum fork, ensuring event emission fidelity and reconnection logic.
+- **Event Dispatcher Hardening**: Add back-pressure handling, queue size metrics, and structured error reporting for misbehaving subscribers.
+- **Plugin Lifecycle Enhancements**: Implement file system watchers for automatic hot-reload in development and expose plugin health/status introspection.
 
 ## 2. WebSocket & API Layer
 - **Local WebSocket Hub**: Build the `websocket_server.py` service for GUI and plugin communications, including authentication tokens and heartbeat pings.

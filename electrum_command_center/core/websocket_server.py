@@ -18,7 +18,6 @@ except ImportError:  # pragma: no cover - optional dependency guard
 
 from .event_dispatcher import EventDispatcher
 from .plugin_manager import PluginLoadError, PluginManager
-from .service_health import ServiceHealthMonitor
 
 
 LOGGER = logging.getLogger(__name__)
@@ -45,7 +44,6 @@ class WebSocketServer:
         allowed_tokens: Optional[Set[str]] = None,
         heartbeat_interval: float = 30.0,
         queue_maxsize: int = 100,
-        service_monitor: Optional[ServiceHealthMonitor] = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -58,7 +56,6 @@ class WebSocketServer:
         self._clients: Dict[WebSocketServerProtocol, _Client] = {}
         self._client_ids: Dict[str, WebSocketServerProtocol] = {}
         self._lock = asyncio.Lock()
-        self._service_monitor = service_monitor
 
     async def start(self) -> None:
         if self._server is not None:
@@ -270,7 +267,7 @@ class WebSocketServer:
         }
 
     def _health_snapshot(self) -> Dict[str, Any]:
-        payload = {
+        return {
             "type": "health",
             "dispatcher": self._plugin_manager.dispatcher_metrics(),
             "plugins": self._plugin_manager.plugin_health(),
@@ -279,9 +276,6 @@ class WebSocketServer:
                 "clients": [client.client_id for client in self._clients.values()],
             },
         }
-        if self._service_monitor is not None:
-            payload["services"] = self._service_monitor.snapshot()
-        return payload
 
     async def _send_error(
         self,

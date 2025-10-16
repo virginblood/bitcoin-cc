@@ -10,7 +10,6 @@ serialisation while ensuring fields are consistently shaped.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional
 
 
@@ -66,33 +65,6 @@ class ConnectionState:
         payload = {"state": self.state}
         if self.server:
             payload["server"] = self.server
-        return payload
-
-
-@dataclass(slots=True)
-class ServiceHealth:
-    """Structured view of a core service's health state."""
-
-    component: str
-    state: str
-    severity: str
-    server: Optional[str] = None
-    last_change: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    details: Optional[Mapping[str, Any]] = None
-
-    def to_payload(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
-            "component": self.component,
-            "state": self.state,
-            "severity": self.severity,
-            "last_change": self.last_change,
-        }
-        if self.server:
-            payload["server"] = self.server
-        if self.details:
-            payload["details"] = dict(self.details)
         return payload
 
 
