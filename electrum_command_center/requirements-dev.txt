@@ -1,0 +1,6 @@
+pytest
+aiohttp
+pyright
+ruff
+watchfiles
+websockets>=11,<13

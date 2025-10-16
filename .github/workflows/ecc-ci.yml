@@ -1,0 +1,38 @@
+name: Electrum Command Center CI
+
+on:
+  pull_request:
+    paths:
+      - "electrum_command_center/**"
+      - ".github/workflows/ecc-ci.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "electrum_command_center/**"
+      - ".github/workflows/ecc-ci.yml"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r electrum_command_center/requirements-dev.txt
+          python -m pip install -e .
+
+      - name: Ruff
+        run: ruff check electrum_command_center
+
+      - name: Pyright
+        run: pyright
+
+      - name: Pytest
+        run: pytest
