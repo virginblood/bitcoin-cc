@@ -68,6 +68,37 @@ class ConnectionState:
         return payload
 
 
+@dataclass(slots=True)
+class ServiceHealth:
+    """Structured payload representing a service health snapshot."""
+
+    component: str
+    state: str
+    severity: str
+    server: Optional[str] = None
+    last_change: Optional[str] = None
+    details: Optional[Mapping[str, Any]] = None
+    metadata: Optional[Mapping[str, Any]] = None
+
+    def to_payload(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "component": self.component,
+            "state": self.state,
+            "severity": self.severity,
+        }
+
+        if self.server is not None:
+            payload["server"] = self.server
+
+        if self.last_change is not None:
+            payload["last_change"] = self.last_change
+
+        if self.details is not None:
+            payload["details"] = dict(self.details)
+
+        return merge_metadata(payload, self.metadata)
+
+
 def merge_metadata(payload: Dict[str, Any], metadata: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Return a new payload dict merged with optional metadata."""
 
