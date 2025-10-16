@@ -1,6 +1,7 @@
 import asyncio
 import textwrap
 from types import ModuleType
+from typing import Optional
 
 from ..core.event_dispatcher import EventDispatcher
 from ..core.plugin_manager import PluginManager, PluginMetadata
@@ -43,6 +44,18 @@ async def _test_plugin_manager_reports_health(tmp_path) -> None:
     assert module.EVENTS[0][0] == "transaction_received"
     assert module.EVENTS[0][1]["amount_sats"] == 42
 
+    status = manager.plugin_status()
+    assert status["loaded"] == 1
+    assert status["plugins"][0]["name"] == "demo"
+    assert status["plugins"][0]["queues"][0]["event"] == "transaction_received"
+
+    metrics = manager.dispatcher_metrics()
+    assert metrics["delivered"]["transaction_received"] >= 1
+    assert any(sub["subscriber"].startswith("plugin:demo") for sub in metrics["subscribers"])
+
+    available = manager.list_available_plugins()
+    assert any(plugin["name"] == "demo" and plugin["loaded"] for plugin in available)
+
     health = manager.plugin_health()
     assert health["loaded"] == 1
     assert health["plugins"][0]["name"] == "demo"
@@ -56,10 +69,18 @@ def test_unload_plugin_handles_full_bounded_queue(tmp_path) -> None:
 
 async def _test_unload_plugin_handles_full_bounded_queue(tmp_path) -> None:
     class BoundedDispatcher(EventDispatcher):
-        def register_queue(self, event_name: str) -> "asyncio.Queue[dict]":
-            queue: "asyncio.Queue[dict]" = asyncio.Queue(maxsize=1)
-            self._queues[event_name].append(queue)
-            return queue
+        def register_queue(
+            self,
+            event_name: str,
+            *,
+            maxsize: Optional[int] = None,
+            subscriber_id: Optional[str] = None,
+        ) -> "asyncio.Queue[dict]":
+            return super().register_queue(
+                event_name,
+                maxsize=1 if maxsize is None else maxsize,
+                subscriber_id=subscriber_id,
+            )
 
     loop = asyncio.get_running_loop()
     dispatcher = BoundedDispatcher()

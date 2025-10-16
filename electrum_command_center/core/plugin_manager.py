@@ -79,6 +79,18 @@ class PluginManager:
         await self._register_plugin(metadata)
         LOGGER.info("Plugin '%s' loaded", metadata.name)
 
+    async def load_plugin_by_name(self, plugin_name: str) -> None:
+        """Load a plugin by directory name."""
+
+        if plugin_name in self._plugins:
+            raise PluginLoadError(f"Plugin '{plugin_name}' is already loaded")
+
+        for init_file in self._discover_plugin_files():
+            if init_file.parent.name == plugin_name:
+                await self.load_plugin(init_file)
+                return
+        raise PluginLoadError(f"Plugin '{plugin_name}' was not found")
+
     async def reload_plugin(self, plugin_name: str) -> None:
         """Reload a plugin that is already active."""
 
@@ -109,6 +121,109 @@ class PluginManager:
         await asyncio.gather(
             *(self.unload_plugin(name) for name in list(self._plugins.keys()))
         )
+
+    # ------------------------------------------------------------------
+    # Introspection helpers
+    # ------------------------------------------------------------------
+    def plugin_status(self) -> Dict[str, Any]:
+        """Return a detailed snapshot of loaded plugin state."""
+
+        plugins: List[Dict[str, Any]] = []
+        for metadata in self._plugins.values():
+            task_descriptors: List[Dict[str, Any]] = []
+            for index, task in enumerate(metadata.tasks):
+                descriptor: Dict[str, Any] = {
+                    "name": task.get_name() or f"task-{index}",
+                    "done": task.done(),
+                    "cancelled": task.cancelled(),
+                }
+                if task.done() and not task.cancelled():
+                    try:
+                        exception = task.exception()
+                    except asyncio.InvalidStateError:  # pragma: no cover - defensive
+                        exception = None
+                    if exception:
+                        descriptor["error"] = repr(exception)
+                task_descriptors.append(descriptor)
+
+            queue_descriptors = [
+                {
+                    "event": event_name,
+                    "size": queue.qsize(),
+                    "maxsize": queue.maxsize,
+                }
+                for event_name, queue in metadata.queues.items()
+            ]
+
+            plugins.append(
+                {
+                    "name": metadata.name,
+                    "module": metadata.module.__name__,
+                    "events": list(metadata.event_subscriptions),
+                    "tasks": task_descriptors,
+                    "queues": queue_descriptors,
+                }
+            )
+
+        return {"loaded": len(self._plugins), "plugins": plugins}
+
+    def plugin_health(self) -> Dict[str, Any]:
+        """Return a summary of plugin runtime health."""
+
+        plugins: List[Dict[str, Any]] = []
+        for metadata in self._plugins.values():
+            unhealthy = False
+            task_states: List[Dict[str, Any]] = []
+            for index, task in enumerate(metadata.tasks):
+                state: Dict[str, Any] = {
+                    "name": task.get_name() or f"task-{index}",
+                    "done": task.done(),
+                    "cancelled": task.cancelled(),
+                }
+                if task.done() and not task.cancelled():
+                    try:
+                        exception = task.exception()
+                    except asyncio.InvalidStateError:  # pragma: no cover - defensive
+                        exception = None
+                    if exception:
+                        state["error"] = repr(exception)
+                        unhealthy = True
+                task_states.append(state)
+
+            status = "error" if unhealthy else "running"
+            if not metadata.tasks:
+                status = "idle"
+
+            plugins.append(
+                {
+                    "name": metadata.name,
+                    "status": status,
+                    "events": list(metadata.event_subscriptions),
+                    "tasks": task_states,
+                }
+            )
+
+        return {"loaded": len(self._plugins), "plugins": plugins}
+
+    def dispatcher_metrics(self) -> Dict[str, Any]:
+        """Expose dispatcher metrics to external consumers."""
+
+        return self._event_dispatcher.metrics_snapshot()
+
+    def list_available_plugins(self) -> List[Dict[str, Any]]:
+        """Enumerate plugin modules found on disk."""
+
+        available: List[Dict[str, Any]] = []
+        for init_file in self._discover_plugin_files():
+            name = init_file.parent.name
+            available.append(
+                {
+                    "name": name,
+                    "path": str(init_file),
+                    "loaded": name in self._plugins,
+                }
+            )
+        return sorted(available, key=lambda item: item["name"])
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -175,7 +290,10 @@ class PluginManager:
             )
 
         for event_name in metadata.event_subscriptions:
-            queue = self._event_dispatcher.register_queue(event_name)
+            subscriber_id = f"plugin:{metadata.name}:{event_name}"
+            queue = self._event_dispatcher.register_queue(
+                event_name, subscriber_id=subscriber_id
+            )
             task = self._loop.create_task(
                 self._event_worker(metadata, event_name, queue)
             )
