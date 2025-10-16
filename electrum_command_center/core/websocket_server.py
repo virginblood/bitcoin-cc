@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover - optional dependency guard
 
 from .event_dispatcher import EventDispatcher
 from .plugin_manager import PluginLoadError, PluginManager
+from .telemetry_store import TelemetryStore
 
 
 LOGGER = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class WebSocketServer:
         allowed_tokens: Optional[Set[str]] = None,
         heartbeat_interval: float = 30.0,
         queue_maxsize: int = 100,
+        telemetry_store: Optional[TelemetryStore] = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -56,6 +58,7 @@ class WebSocketServer:
         self._clients: Dict[WebSocketServerProtocol, _Client] = {}
         self._client_ids: Dict[str, WebSocketServerProtocol] = {}
         self._lock = asyncio.Lock()
+        self._telemetry_store = telemetry_store
 
     async def start(self) -> None:
         if self._server is not None:
@@ -191,6 +194,10 @@ class WebSocketServer:
                 await websocket.send(json.dumps(self._health_snapshot()))
                 continue
 
+            if action == "history":
+                await websocket.send(json.dumps(self._history_snapshot()))
+                continue
+
             if action in {"load_plugin", "unload_plugin", "reload_plugin"}:
                 name = payload.get("name")
                 if not name:
@@ -269,7 +276,7 @@ class WebSocketServer:
         }
 
     def _health_snapshot(self) -> Dict[str, Any]:
-        return {
+        snapshot = {
             "type": "health",
             "dispatcher": self._plugin_manager.dispatcher_metrics(),
             "plugins": self._plugin_manager.plugin_health(),
@@ -278,6 +285,19 @@ class WebSocketServer:
                 "clients": [client.client_id for client in self._clients.values()],
             },
         }
+
+        if self._telemetry_store is not None:
+            self._telemetry_store.record_health_snapshot(snapshot)
+
+        return snapshot
+
+    def _history_snapshot(self) -> Dict[str, Any]:
+        history: Dict[str, Any]
+        if self._telemetry_store is None:
+            history = {"health": [], "service_health": []}
+        else:
+            history = self._telemetry_store.history()
+        return {"type": "history", **history}
 
     async def _send_error(
         self,

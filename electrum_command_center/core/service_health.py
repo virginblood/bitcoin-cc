@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 from .event_dispatcher import EventDispatcher
 from .event_schemas import ServiceHealth
+from .telemetry_store import TelemetryStore
 
 
 def _now_iso() -> str:
@@ -33,6 +34,7 @@ class ServiceHealthMonitor:
         *,
         loop: Optional[asyncio.AbstractEventLoop] = None,
         queue_maxsize: int = 0,
+        telemetry_store: Optional[TelemetryStore] = None,
     ) -> None:
         self._dispatcher = dispatcher
         self._loop = loop or asyncio.get_event_loop()
@@ -42,6 +44,7 @@ class ServiceHealthMonitor:
         self._state: Dict[str, _ServiceState] = {}
         self._lock = asyncio.Lock()
         self._running = False
+        self._telemetry_store = telemetry_store
 
     async def start(self) -> None:
         if self._running:
@@ -146,5 +149,8 @@ class ServiceHealthMonitor:
             last_change=last_change,
             details=details or None,
         ).to_payload()
+
+        if self._telemetry_store is not None:
+            self._telemetry_store.record_service_health(health_payload)
 
         await self._dispatcher.emit("service_health", health_payload)

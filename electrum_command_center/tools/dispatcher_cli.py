@@ -34,7 +34,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--action",
         default="health",
-        choices=["health", "plugins"],
+        choices=["health", "plugins", "history"],
         help="Which management action to invoke",
     )
     return parser
@@ -50,6 +50,8 @@ async def _fetch_metrics(host: str, port: int, token: str, action: str, timeout:
     async with websockets.connect(uri, open_timeout=timeout) as websocket:
         if action == "plugins":
             await websocket.send(json.dumps({"action": "list_plugins"}))
+        elif action == "history":
+            await websocket.send(json.dumps({"action": "history"}))
         else:
             await websocket.send(json.dumps({"action": "health"}))
 
