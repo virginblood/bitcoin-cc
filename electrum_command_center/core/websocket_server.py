@@ -84,8 +84,10 @@ class WebSocketServer:
         self._server = None
 
         async with self._lock:
-            for client in list(self._clients.values()):
-                await self._disconnect_client(client.websocket)
+            client_websockets = list(self._clients.keys())
+
+        for websocket in client_websockets:
+            await self._disconnect_client(websocket)
 
     async def _client_handler(self, websocket: WebSocketServerProtocol) -> None:
         params = self._extract_params(websocket.path)
